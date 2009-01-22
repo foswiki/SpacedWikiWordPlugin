@@ -17,6 +17,8 @@
 # -v Be verbose
 #
 
+package SpacedWikiWordPluginBuild;
+
 # Standard preamble
 BEGIN {
   foreach my $pc (split(/:/, $ENV{FOSWIKI_LIBS})) {
@@ -24,31 +26,12 @@ BEGIN {
   }
 }
 
-use Foswiki::Contrib::Build;
-
-# Declare our build package
-{ package SpacedWikiWordPluginBuild;
-
-  @SpacedWikiWordPluginBuild::ISA = ( "Foswiki::Contrib::Build" );
+use base qw( Foswiki::Contrib::Build );
 
   sub new {
     my $class = shift;
     return bless( $class->SUPER::new( "SpacedWikiWordPlugin"), $class );
   }
 
-  # Example: Override the build target
-  sub target_build {
-    my $this = shift;
-
-    $this->SUPER::target_build();
-
-    # Do other build stuff here
-  }
-}
-
-# Create the build object
 $build = new SpacedWikiWordPluginBuild();
-
-# Build the target on the command line, or the default target
 $build->build($build->{target});
-

@@ -136,8 +136,7 @@ sub _spaceOutWikiWordLinks {
     my $upperAlphaRegex = Foswiki::Func::getRegularExpression('upperAlpha');
     my $numericRegex    = Foswiki::Func::getRegularExpression('numeric');
 
-    $linkLabel =~
-s/([$lowerAlphaRegex])([$upperAlphaRegex$numericRegex]+)/$1$separator$2/go;
+    $linkLabel =~ s/([$lowerAlphaRegex])([$upperAlphaRegex$numericRegex]+)/$1$separator$2/go;
     $linkLabel =~ s/([$numericRegex])([$upperAlphaRegex])/$1$separator$2/go;
 
     return $linkLabel;
