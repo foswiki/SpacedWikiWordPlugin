@@ -26,7 +26,8 @@ BEGIN {
   }
 }
 
-use base qw( Foswiki::Contrib::Build );
+use Foswiki::Contrib::Build;
+our @ISA = qw( Foswiki::Contrib::Build );
 
   sub new {
     my $class = shift;
