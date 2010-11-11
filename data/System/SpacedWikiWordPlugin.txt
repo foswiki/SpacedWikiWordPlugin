@@ -119,8 +119,10 @@ To install plugin:
 ---++ Plugin Info
 
 |  Copyright: | &copy; Foswiki:Main.MartinCleaver (2002, 2004), Foswiki:Main.ArthurClemens (2007, 2008) |
-|  Plugin Version: | 21 Jan 2009 |
+|  Release: | %$RELEASE% |
+|  Version: | %$VERSION% |
 |     History: | <!-- specify latest version first -->&nbsp; |
+|  10 Nov 2010 | Padraig Lennon: Foswikitask:Item9994 - Fix Release Version | 
 |  23 Nov 2007 | Arthur Clemens: made compatible to Foswiki; allow =DONTSPACE= to separated words by spaces. | 
 |  05 May 2007 | Arthur Clemens: fixed a wrong function call, thanks TWiki:Main.JohnFitzpatrick. |
 |  04 May 2007 | Arthur Clemens: spacing out uses a Core function (from Plugins version 1.13; fallback for older versions); added support for spacing out of "underscore topic names"; added optional removal of anchor dashes. |
@@ -131,5 +133,6 @@ To install plugin:
 |  Other Dependencies: | none |
 |  Perl Version: | 5.0 |
 |  Plugin Home: | http://foswiki.org/Extensions/%TOPIC% |
-|  Feedback: | http://foswiki.org/Extensions/%TOPIC%Dev | %STOPINCLUDE%
-|  Download: | http://foswiki.org/Extensions/%TOPIC% |
+|  Support: | http://foswiki.org/Support/%TOPIC% |
+
+__Related Topics:__ %USERSWEB%.SitePreferences, [[%SYSTEMWEB%.Plugins][Plugins]]
