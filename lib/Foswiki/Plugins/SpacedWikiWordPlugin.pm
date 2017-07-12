@@ -1,184 +1,117 @@
-# Plugin for Foswiki - The Free and Open Source Wiki, http://foswiki.org/
-#
-# Copyright (c) by Foswiki Contributors. All Rights Reserved. Foswiki Contributors
-# are listed in the AUTHORS file in the root of this distribution.
-# NOTE: Please extend that file, not this notice.
-#
-# This program is free software; you can redistribute it and/or
-# modify it under the terms of the GNU General Public License
-# as published by the Free Software Foundation; either version 2
-# of the License, or (at your option) any later version. For
-# more details read LICENSE in the root of this distribution.
-#
-# This program is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-#
-# For licensing info read LICENSE file in the Foswiki root.
-
-# =========================
+# See bottom of file for license and copyright information
 package Foswiki::Plugins::SpacedWikiWordPlugin;
 
-# =========================
-use vars qw(
-  $web $topic $user $installWeb $VERSION $RELEASE $debug %dontSpaceSet $spaceOutWikiWordLinks $spaceOutUnderscoreLinks $removeAnchorDashes
-);
+use strict;
+use warnings;
 
-# This should always be $Rev$ so that Foswiki can determine the checked-in
-# status of the plugin. It is used by the build automation tools, so
-# you should leave it alone.
-$VERSION = '$Rev$';
+our $VERSION = '1.1';
+our $RELEASE = '12 July 2017';
+our $SHORTDESCRIPTION = "Space out Wiki Word links automatically";
+our $NO_PREFS_IN_TOPIC = 1;
 
-# This is a free-form string you can use to "name" your own plugin version.
-# It is *not* used by the build automation tools, but is reported as part
-# of the version number in PLUGINDESCRIPTIONS.
-$RELEASE = '1.0.1';
+our $spaceOutWikiWordLinks;
+our $spaceOutUnderscoreLinks;
+our $removeAnchorDashes;
+our %dontSpaceSet = ();
+our $default_spaceOutWikiWord;
 
-# =========================
+sub _get_bool_pref {
+    my ($n, $default) = @_;
+    my $v = Foswiki::Func::getPreferencesValue($n);
+    return $default unless defined $v;
+    $v = Foswiki::Func::expandCommonVariables( $v );
+    return $v;
+}
+
 sub initPlugin {
-    ( $topic, $web, $user, $installWeb ) = @_;
+    my ( $topic, $web, $user, $installWeb ) = @_;
 
-    # check for Plugins.pm versions
-    if ( $Foswiki::Plugins::VERSION < 1 ) {
-        &Foswiki::Func::writeWarning(
-            "Version mismatch between SpacedWikiWordPlugin and Plugins.pm");
-        return 0;
+    $spaceOutWikiWordLinks = _get_bool_pref("SPACE_OUT_WIKI_WORD_LINKS", 1);
+    $spaceOutUnderscoreLinks = _get_bool_pref("SPACE_OUT_UNDERSCORE_LINKS", 1);
+    $removeAnchorDashes = _get_bool_pref("REMOVE_ANCHOR_DASHES", 0);
+    my $dontSpaceWords = _get_bool_pref("DONTSPACE", '');
+    $dontSpaceWords =~ s/^\s*(.*?)\s*$/$1/;
+    %dontSpaceSet = map { $_ => 1 } split( /[,\s]+/, $dontSpaceWords );
+
+    # Monkey patch!
+    unless (defined $default_spaceOutWikiWord) {
+        $default_spaceOutWikiWord = \&Foswiki::spaceOutWikiWord;
+        no warnings;
+        *Foswiki::spaceOutWikiWord = \&_spaceOutWikiWord;
+        use warnings;
     }
-
-    # Get plugin debug flag
-    $debug = &Foswiki::Func::getPreferencesFlag("SPACEDWIKIWORDPLUGIN_DEBUG");
-
-    $spaceOutWikiWordLinks =
-      &Foswiki::Func::getPreferencesValue("SPACE_OUT_WIKI_WORD_LINKS")
-      || &Foswiki::Func::getPreferencesValue(
-        "SPACEDWIKIWORDPLUGIN_SPACE_OUT_WIKI_WORD_LINKS");
-
-    $spaceOutUnderscoreLinks =
-      &Foswiki::Func::getPreferencesValue("SPACE_OUT_UNDERSCORE_LINKS")
-      || &Foswiki::Func::getPreferencesValue(
-        "SPACEDWIKIWORDPLUGIN_SPACE_OUT_UNDERSCORE_LINKS");
-
-    $removeAnchorDashes =
-      &Foswiki::Func::getPreferencesValue("REMOVE_ANCHOR_DASHES")
-      || &Foswiki::Func::getPreferencesValue(
-        "SPACEDWIKIWORDPLUGIN_REMOVE_ANCHOR_DASHES");
-
-    my $dontSpaceWords = &Foswiki::Func::getPreferencesValue("DONTSPACE")
-      || &Foswiki::Func::getPreferencesValue("SPACEDWIKIWORDPLUGIN_DONTSPACE");
-    $dontSpaceWords =~ s/^\s*(\w+)\s*$/$1/go;
-    $dontSpaceWords =~ s/\s+/ /go;
-    %dontSpaceSet = map { $_ => 1 } split( /[,\s]/, $dontSpaceWords )
-      if $dontSpaceWords;
-
-    Foswiki::Func::registerTagHandler( 'SPACEOUT', \&_SPACEOUT );
-
-    # Plugin correctly initialized
-    &Foswiki::Func::writeDebug(
-        "- Foswiki::Plugins::SpacedWikiWord::initPlugin( $web.$topic ) is OK")
-      if $debug;
+        
     return 1;
 }
 
 =pod
 
 ---++ renderWikiWordHandler( $linkLabel, $hasExplicitLinkLabel ) -> $text
-
+Handler invoked by the core rendering engine to render a wikiword.
    * =$linkLabel= - the link label to be spaced out
    * =$hasExplicitLinkLabel= - in case of bracket notation: the link label is written as [[TopicName][link label]]
 
-We use the following rules:
-   - Space out in case of TopicName, Web.TopicName, [[TopicName]]
-   - Do not space out [[TopicName][TopicName]] or [[TopicName][SomeOtherName]]; in these cases the topic author has used an explicit link label
-   - Search results written as [[$web.$topic][$topic]] are not spaced
-out. Use [[$web.$topic][$percntSPACEOUT{$topic}$percnt]] instead.
-    
 =cut
 
 sub renderWikiWordHandler {
     my ( $linkLabel, $hasExplicitLinkLabel ) = @_;
 
     # do nothing if this label is defined in the do-not-link list
-    return $linkLabel if $dontSpaceSet{$linkLabel};
-
-    if ( $spaceOutUnderscoreLinks && !$hasExplicitLinkLabel ) {
-        $linkLabel = _spaceOutUnderscoreTopicLinks($linkLabel);
+    $linkLabel =~ s/^(#)//;
+    my $dashed = $1 // '';
+    
+    unless ( $hasExplicitLinkLabel || $dontSpaceSet{$linkLabel}) {
+        $linkLabel =~ s/_/ /g if $spaceOutUnderscoreLinks;
+        $linkLabel = Foswiki::Func::spaceOutWikiWord($linkLabel)
+            if ( $spaceOutWikiWordLinks );
     }
+    
+    # eat anchor dash
+    $dashed = '' if $removeAnchorDashes;
 
-    if ( $spaceOutWikiWordLinks && !$hasExplicitLinkLabel ) {
-        if ( $Foswiki::Plugins::VERSION < 1.13 ) {
-            $linkLabel = _spaceOutWikiWordLinks($linkLabel);
-        }
-        else {
-            $linkLabel = Foswiki::Func::spaceOutWikiWord($linkLabel);
-        }
-
-        # eat anchor dash
-        $linkLabel =~ s/^#(.*?)$/$1/go if $removeAnchorDashes;
-    }
-
-    return $linkLabel;
+    return ($dashed ? '#' : '') . $linkLabel;
 }
 
 =pod
 
 ---++ _spaceOutWikiWordLinks( $linkLabel ) -> $text
 
-Fallback for older Plugins version. Regexes are copied from Foswiki::spaceOutWikiWord.
+Monkey-patch replacing Foswiki::spaceOutWikiWord.
 
    * =$linkLabel= - the link label to be spaced out
 
 =cut
 
-sub _spaceOutWikiWordLinks {
-    my ( $linkLabel, $sep ) = @_;
+sub _spaceOutWikiWord {
+    my ( $word, $sep ) = @_;
 
-    my $separator       = $sep || ' ';
-    my $lowerAlphaRegex = Foswiki::Func::getRegularExpression('lowerAlpha');
-    my $upperAlphaRegex = Foswiki::Func::getRegularExpression('upperAlpha');
-    my $numericRegex    = Foswiki::Func::getRegularExpression('numeric');
-
-    $linkLabel =~
-s/([$lowerAlphaRegex])([$upperAlphaRegex$numericRegex]+)/$1$separator$2/go;
-    $linkLabel =~ s/([$numericRegex])([$upperAlphaRegex])/$1$separator$2/go;
-
-    return $linkLabel;
-}
-
-=pod
-
-Space out underscore topic links: "Human_revolution" becomes "Human revolution"
-
-   * =$linkLabel= - the link label to be spaced out
-
-=cut
-
-sub _spaceOutUnderscoreTopicLinks {
-    my ($linkLabel) = @_;
-
-    $linkLabel =~ s/_/ /go;
-
-    return $linkLabel;
-}
-
-=pod
-
-Override Foswiki _SPACEOUT function to enable spacing out of underscore topic links. 
-
-   * =$this= - not used
-   * =$params=
-      - (default) - the string to space out
-      - separator - the separator string, default a space
-      
-=cut
-
-sub _SPACEOUT {
-    my ( $this, $params ) = @_;
-
-    my $spaceOutTopic = $params->{_DEFAULT};
-    my $sep           = $params->{'separator'};
-    $spaceOutTopic = _spaceOutWikiWordLinks( $spaceOutTopic, $sep );
-    $spaceOutTopic = _spaceOutUnderscoreTopicLinks($spaceOutTopic);
-    return $spaceOutTopic;
+    $word //= '';
+    $sep  //= ' ';
+    my $mark = "\001";
+    $word =~ s/([[:upper:]])([[:digit:]])/$1$mark$2/g;
+    $word =~ s/([[:digit:]])([[:upper:]])/$1$mark$2/g;
+    $word =~ s/([[:lower:]])([[:upper:][:digit:]]+)/$1$mark$2/g;
+    $word =~ s/(^|[^[:upper:]])([[:upper:]])([[:upper:]])([[:lower:]])/$1$2$mark$3$4/g;
+    $word =~ s/$mark/$sep/g;
+    return $word;
 }
 
 1;
+__END__
+Copyright (C) 2008-2017 Foswiki Contributors. All Rights Reserved. Foswiki Contributors
+are listed in the AUTHORS file in the root of this distribution.
+NOTE: Please extend that file, not this notice.
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version. For
+more details read LICENSE in the root of this distribution.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+
+For licensing info read LICENSE file in the Foswiki root.
+
+As per the GPL, removal of this notice is prohibited.
